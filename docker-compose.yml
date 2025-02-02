@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # Servicio de Reverse Proxy con Traefik
+  traefik:
+    image: traefik:v2.9
+    container_name: traefik_proxy
+    restart: always
+    command:
+      - "--api.insecure=true"                       # (Opcional) Activa la interfaz web de Traefik en :8080 (puedes acceder a ella para ver la configuración dinámica)
+      - "--providers.docker=true"                   # Habilita el provider de Docker
+      - "--providers.docker.exposedbydefault=false" # Sólo expondrá los contenedores que tengan la etiqueta traefik.enable=true
+      - "--entrypoints.web.address=:80"             # Define el entrypoint para HTTP
+      - "--entrypoints.websecure.address=:443"       # (Opcional) Si configuras TLS
+      # Configuración de Let's Encrypt (opcional para HTTPS)
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=developer.bernalgutierrez@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      #- "8080:8080"  # (Opcional) Para acceder a la interfaz de Traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt  # (Descomenta si usas Let's Encrypt)
+    networks:
+      - webnet
+
+  # Aplicación Laravel
+  app:
+    build: .
+    container_name: laravel_app
+    volumes:
+      - ./app:/var/www/html   # La carpeta "app" contendrá el proyecto Laravel
+    environment:
+      - APACHE_DOCUMENT_ROOT=/var/www/html/public
+    depends_on:
+      - db
+    labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.laravel.rule=Host(`francobg.online`)"
+    - "traefik.http.routers.laravel.entrypoints=web"
+    - "traefik.http.routers.laravel-secure.rule=Host(`francobg.online`)"
+    - "traefik.http.routers.laravel-secure.entrypoints=websecure"
+    - "traefik.http.routers.laravel-secure.tls=true"
+    - "traefik.http.routers.laravel-secure.tls.certresolver=myresolver"
+    # (Opcional) Puedes dar una prioridad más alta para asegurarte de que se use:
+    - "traefik.http.routers.laravel-secure.priority=10"
+    networks:
+      - webnet
+
+  # Base de Datos MySQL
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: laravel
+      MYSQL_USER: laravel
+      MYSQL_PASSWORD: secret
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - webnet
+
+  # phpMyAdmin (accedido mediante subdominio)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: secret
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.phpmyadmin.rule=Host(`pma.francobg.online`)"
+      - "traefik.http.routers.phpmyadmin.entrypoints=web"
+      - "traefik.http.routers.phpmyadmin-secure.rule=Host(`pma.francobg.online`)"
+      - "traefik.http.routers.phpmyadmin-secure.entrypoints=websecure"
+      - "traefik.http.routers.phpmyadmin-secure.tls=true"
+      - "traefik.http.routers.phpmyadmin-secure.tls.certresolver=myresolver"
+    depends_on:
+      - db
+    networks:
+      - webnet
+
+volumes:
+  db_data:
+
+networks:
+  webnet:
+
