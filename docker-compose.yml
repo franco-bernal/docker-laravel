@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Servicio de Reverse Proxy con Traefik
   traefik:
@@ -89,4 +87,4 @@ volumes:
 
 networks:
   webnet:
-
+    external: true
