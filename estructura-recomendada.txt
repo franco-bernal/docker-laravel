@@ -1,0 +1,91 @@
+------------------------------------------------------------
+README-StacksStructure.txt
+------------------------------------------------------------
+
+INTRODUCCIÓN:
+------------
+Este documento describe una posible estructura para organizar distintos stacks de Docker en /var/www, de forma modular, de modo que:
+  • Traefik sirva como reverse proxy para todas las aplicaciones en una red común.
+  • Cada aplicación se administre en su propio stack (con su docker-compose.yml).
+  • Las bases de datos se ubiquen en stacks separados y se conecten a través de redes externas.
+  
+Ejemplo de aplicaciones:
+  - Laravel: usa MySQL (dbnet1) y Traefik (webnet).
+  - PrestaShop: usa la misma instancia MySQL (dbnet1) compartida con Laravel y Traefik (webnet).
+  - Aplicación Go: usa MongoDB (dbnet2) y se conecta a Traefik (webnet).
+
+ESTRUCTURA DE CARPETAS:
+------------------------
+/var/www/
+   ├── traefik-stack/
+   │      docker-compose.yml         <-- Stack del reverse proxy (Traefik)
+   │      (otros archivos de configuración, si los hay)
+   │
+   ├── mysql-stack/
+   │      docker-compose.yml         <-- Stack para MySQL y phpMyAdmin (base de datos relacional)
+   │      data/                      <-- (Opcional) Carpeta para persistir datos de MySQL
+   │
+   ├── mongodb-stack/
+   │      docker-compose.yml         <-- Stack para MongoDB (base de datos NoSQL)
+   │      data/                      <-- (Opcional) Carpeta para persistir datos de MongoDB
+   │
+   ├── laravel-stack/
+   │      docker-compose.yml         <-- Stack de la aplicación Laravel
+   │      app/                       <-- Carpeta con el proyecto Laravel
+   │           (incluye "public", etc.)
+   │
+   ├── prestashop-stack/
+   │      docker-compose.yml         <-- Stack de la aplicación PrestaShop
+   │      app/                       <-- Carpeta para la instalación de PrestaShop
+   │           html/                <-- (Bind mount: se monta en /var/www/html dentro del contenedor)
+   │
+   └── go-stack/
+          docker-compose.yml         <-- Stack de la aplicación Go
+          app/                       <-- Carpeta con los archivos de la aplicación Go
+
+REDES EXTERNAS:
+---------------
+Se crearán y utilizarán las siguientes redes externas:
+
+   • webnet   : Para exponer todos los servicios (usado por Traefik y aplicaciones web).
+   • dbnet1   : Para las bases de datos relacionales (MySQL); utilizado por Laravel, PrestaShop y el stack de MySQL.
+   • dbnet2   : Para la base de datos NoSQL (MongoDB); utilizado por el stack de MongoDB y la aplicación Go.
+
+Cada archivo docker-compose.yml debe declarar las redes de la siguiente forma:
+
+   networks:
+     webnet:
+       external: true
+     dbnet1:
+       external: true
+     dbnet2:
+       external: true
+
+CONFIGURACIÓN DE LOS STACKS:
+----------------------------
+1. Traefik (traefik-stack):
+   - Usa la red "webnet" para enrutar tráfico HTTP/HTTPS.
+   - Solo se conecta a la red "webnet".
+
+2. MySQL y phpMyAdmin (mysql-stack):
+   - Se conectan a "dbnet1" para la base de datos.
+   - Pueden conectarse a "webnet" si es necesario que Traefik enrute el acceso a phpMyAdmin.
+
+3. Laravel (laravel-stack):
+   - Conectado a "webnet" (para Traefik) y a "dbnet1" (para MySQL).
+
+4. PrestaShop (prestashop-stack):
+   - Conectado a "webnet" y a "dbnet1" (para MySQL compartida con Laravel).
+   - El contenido se persistirá en la carpeta "app/html" del host.
+
+5. Aplicación Go (go-stack):
+   - Conectada a "webnet" y a "dbnet2" (para MongoDB).
+
+CONCLUSIÓN:
+-----------
+Esta estructura modular permite gestionar, actualizar y escalar cada servicio de forma independiente, al mismo tiempo que se facilita la comunicación entre ellos mediante redes externas. Puedes ajustar los nombres y configuraciones según las necesidades de tu infraestructura.
+
+------------------------------------------------------------
+FIN DEL TUTORIAL: ESTRUCTURA DE STACKS Y REDES
+------------------------------------------------------------
+
